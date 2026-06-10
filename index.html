@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hexagon Chladni Waves</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #ccd6f6;
+    }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+      padding: 14px 20px;
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid rgba(100,150,255,0.15);
+      z-index: 10;
+    }
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 130px;
+    }
+    .ctrl-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #8892b0; }
+    .ctrl-value { font-size: 18px; font-weight: 600; color: #64ffda; min-width: 2.2em; text-align: center; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 130px; height: 4px; border-radius: 2px;
+      background: rgba(100,255,218,0.2); outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #64ffda; box-shadow: 0 0 6px #64ffda88; cursor: pointer;
+    }
+    #canvas-wrap { flex: 1; width: 100%; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <div class="ctrl">
+    <span class="ctrl-label">Hex Size</span>
+    <span class="ctrl-value" id="vSize">5</span>
+    <input type="range" id="sSize" min="1" max="20" value="5" step="0.5">
+  </div>
+  <div class="ctrl">
+    <span class="ctrl-label">Mode m</span>
+    <span class="ctrl-value" id="vM">3</span>
+    <input type="range" id="sM" min="1" max="12" value="3">
+  </div>
+  <div class="ctrl">
+    <span class="ctrl-label">Mode n</span>
+    <span class="ctrl-value" id="vN">4</span>
+    <input type="range" id="sN" min="1" max="12" value="4">
+  </div>
+  <div class="ctrl">
+    <span class="ctrl-label">Animate</span>
+    <span class="ctrl-value" id="vAnim">0.0</span>
+    <input type="range" id="sAnim" min="0" max="100" value="0">
+  </div>
+</div>
+
+<div id="canvas-wrap"></div>
+
+<script>
+// ── Vertex shader: standard p5 WEBGL pass-through ──────────────────────────
+const VERT = `
+  precision highp float;
+  attribute vec3 aPosition;
+  uniform mat4 uModelViewMatrix;
+  uniform mat4 uProjectionMatrix;
+  void main() {
+    gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+  }
+`;
+
+// ── Fragment shader: hexagonal Chladni wave field ──────────────────────────
+//
+// Algorithm:
+//   Take the classic rectangular Chladni formula
+//     f(x,y) = cos(m·x)·cos(n·y) − cos(n·x)·cos(m·y)
+//   and average it over THREE rotations (0°, 120°, 240°).
+//   This imposes 6-fold symmetry so the nodal lines — where f≈0 — form a
+//   hexagonal lattice.  Those zero-crossings ARE the "wave lines" drawn here:
+//   bright glowing curves that trace the interference pattern of six plane
+//   waves, weaving together into hexagons.
+//
+//   Special case m==n: the formula above vanishes identically, so we fall
+//   back to a pure 6-wave hex superposition (one wave per 60° direction).
+// ──────────────────────────────────────────────────────────────────────────
+const FRAG = `
+  precision highp float;
+
+  uniform vec2  u_res;    // canvas size in pixels
+  uniform float u_m;      // mode m
+  uniform float u_n;      // mode n
+  uniform float u_freq;   // spatial frequency (controls hex size)
+  uniform float u_phase;  // animation phase
+
+  const float PI23 = 2.09439510239;  // 2π/3
+  const float PI3  = 1.04719755120;  // π/3
+
+  float hexChladni(vec2 p) {
+    // Degenerate case: m==n → pure hexagonal wave (6 plane waves at 60° apart)
+    if (abs(u_m - u_n) < 0.5) {
+      float s = 0.0;
+      for (int k = 0; k < 6; k++) {
+        float a = float(k) * PI3;
+        s += cos(u_m * dot(p, vec2(cos(a), sin(a))) + u_phase);
+      }
+      return s / 6.0;
+    }
+
+    // General case: Chladni formula averaged over 3 rotations → hexagonal symmetry
+    float s = 0.0;
+    for (int k = 0; k < 3; k++) {
+      float a  = float(k) * PI23;
+      float c  = cos(a);
+      float sv = sin(a);
+      // Rotate p by angle a
+      float rx = p.x * c  - p.y * sv;
+      float ry = p.x * sv + p.y * c;
+      // Rectangular Chladni formula in rotated frame (phase on first term only)
+      s += cos(u_m * rx + u_phase) * cos(u_n * ry)
+         - cos(u_n * rx + u_phase) * cos(u_m * ry);
+    }
+    return s / 3.0;
+  }
+
+  void main() {
+    // Map pixel to centred, frequency-scaled coordinates
+    vec2 p = (gl_FragCoord.xy - u_res * 0.5) * u_freq;
+
+    float v  = hexChladni(p);
+    float av = abs(v);
+
+    // Two-layer glow: sharp bright core + soft wide halo
+    float core = exp(-av * av * 480.0);
+    float halo = exp(-av * av * 22.0);
+
+    // Very subtle background tint distinguishes +/- cells
+    float bgR = (v > 0.0) ? 0.018 : 0.035;
+    float bgB = (v > 0.0) ? 0.090 : 0.050;
+
+    // Final colour: dark navy bg + teal halo + cyan-white core
+    vec3 col = vec3(
+      bgR   + halo * 0.08  + core * 0.50,
+      0.016 + halo * 0.78  + core * 1.00,
+      bgB   + halo * 0.65  + core * 0.85
+    );
+
+    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  }
+`;
+
+// ── p5 sketch ─────────────────────────────────────────────────────────────
+new p5(sketch => {
+  let myShader, t = 0;
+  let sliders, vals, controlsH;
+
+  sketch.setup = function () {
+    sketch.pixelDensity(1);  // keep gl_FragCoord == CSS pixels
+    controlsH = document.getElementById('controls').offsetHeight;
+    let cnv = sketch.createCanvas(
+      sketch.windowWidth,
+      sketch.windowHeight - controlsH,
+      sketch.WEBGL
+    );
+    cnv.parent('canvas-wrap');
+
+    myShader = sketch.createShader(VERT, FRAG);
+    sketch.noStroke();
+
+    sliders = {
+      size: document.getElementById('sSize'),
+      m:    document.getElementById('sM'),
+      n:    document.getElementById('sN'),
+      anim: document.getElementById('sAnim'),
+    };
+    vals = {
+      size: document.getElementById('vSize'),
+      m:    document.getElementById('vM'),
+      n:    document.getElementById('vN'),
+      anim: document.getElementById('vAnim'),
+    };
+
+    Object.entries(sliders).forEach(([k, el]) => {
+      el.addEventListener('input', () => syncLabel(k));
+    });
+  };
+
+  function syncLabel(k) {
+    let raw = parseFloat(sliders[k].value);
+    vals[k].textContent = k === 'anim' ? (raw / 100).toFixed(1) : raw;
+  }
+
+  sketch.draw = function () {
+    t += (parseFloat(sliders.anim.value) / 100) * 0.025;
+
+    let m    = parseFloat(sliders.m.value);
+    let n    = parseFloat(sliders.n.value);
+    let size = parseFloat(sliders.size.value);
+    // freq: larger size → lower frequency → bigger hexagons
+    let freq = 0.025 / size;
+
+    myShader.setUniform('u_res',   [sketch.width, sketch.height]);
+    myShader.setUniform('u_m',     m);
+    myShader.setUniform('u_n',     n);
+    myShader.setUniform('u_freq',  freq);
+    myShader.setUniform('u_phase', t);
+
+    sketch.shader(myShader);
+    // Fullscreen quad (WEBGL origin is canvas centre)
+    sketch.rect(-sketch.width / 2, -sketch.height / 2, sketch.width, sketch.height);
+  };
+
+  sketch.windowResized = function () {
+    controlsH = document.getElementById('controls').offsetHeight;
+    sketch.resizeCanvas(sketch.windowWidth, sketch.windowHeight - controlsH);
+  };
+});
+</script>
+</body>
+</html>
