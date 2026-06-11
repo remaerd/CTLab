@@ -8,9 +8,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Mozilla+Headline:wght@400;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <style>
+    :root {
+      --theme-color: #000000;
+      --contrast-color: #ffffff;
+      --panel-fg: #ffffff;
+      --panel-fg-rgb: 255, 255, 255;
+      --controls-bg: rgba(255, 255, 255, 0.08);
+      --controls-border: rgba(255, 255, 255, 0.28);
+      --panel-rail: rgba(255, 255, 255, 0.3);
+      --panel-btn-bg: rgba(255, 255, 255, 0.1);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #fff;
+      background: var(--theme-color);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -18,6 +28,7 @@
       overflow: hidden;
       font-family: 'Segoe UI', Arial, sans-serif;
       color: #ccd6f6;
+      transition: background-color 700ms ease;
     }
     body.ui-hidden #controls {
       display: none;
@@ -29,10 +40,11 @@
       gap: 24px;
       padding: 14px 20px;
       width: 100%;
-      background: rgba(0,0,0,0.04);
+      background: var(--controls-bg);
       backdrop-filter: blur(6px);
-      border-bottom: 1px solid rgba(100,150,255,0.15);
+      border-bottom: 1px solid var(--controls-border);
       z-index: 10;
+      transition: background-color 500ms ease, border-color 500ms ease;
     }
     .ctrl {
       display: flex;
@@ -41,22 +53,43 @@
       gap: 4px;
       min-width: 130px;
     }
-    .ctrl-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #000; }
-    .ctrl-value { font-size: 18px; font-weight: 600; color: #000; min-width: 2.2em; text-align: center; }
+    .ctrl-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-fg); transition: color 500ms ease; }
+    .ctrl-value { font-size: 18px; font-weight: 600; color: var(--panel-fg); min-width: 2.2em; text-align: center; transition: color 500ms ease; }
+    input[type="color"] {
+      width: 54px;
+      height: 32px;
+      border: 1px solid var(--controls-border);
+      border-radius: 999px;
+      background: var(--panel-btn-bg);
+      cursor: pointer;
+      padding: 2px;
+      transition: background-color 500ms ease, border-color 500ms ease;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 999px;
+    }
     input[type="range"] {
       -webkit-appearance: none;
+      appearance: none;
       width: 130px; height: 4px; border-radius: 2px;
-      background: rgba(0,0,0,0.2); outline: none; cursor: pointer;
+      background: var(--panel-rail); outline: none; cursor: pointer;
+      transition: background-color 500ms ease;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
+      appearance: none;
       width: 14px; height: 14px; border-radius: 50%;
-      background: #000; box-shadow: 0 0 6px #000; cursor: pointer;
+      background: var(--panel-fg);
+      box-shadow: 0 0 6px rgba(var(--panel-fg-rgb), 0.55);
+      cursor: pointer;
+      transition: background-color 500ms ease, box-shadow 500ms ease;
     }
     .ctrl-btn {
-      border: 1px solid rgba(0,0,0,0.35);
-      background: rgba(255,255,255,0.8);
-      color: #000;
+      border: 1px solid var(--controls-border);
+      background: var(--panel-btn-bg);
+      color: var(--panel-fg);
       height: 32px;
       padding: 0 14px;
       border-radius: 999px;
@@ -64,11 +97,11 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: background 0.2s ease, color 0.2s ease;
+      transition: background-color 500ms ease, color 500ms ease, border-color 500ms ease;
     }
     .ctrl-btn:hover {
-      background: #000;
-      color: #fff;
+      background: var(--panel-fg);
+      color: var(--theme-color);
     }
     #canvas-wrap { flex: 1; width: 100%; }
     #headline {
@@ -80,7 +113,7 @@
       font-weight: 700;
       line-height: 0.7;
       letter-spacing: -0.015em;
-      color: rgba(0, 0, 0, 0.92);
+      color: var(--contrast-color);
       pointer-events: none;
       user-select: none;
       display: flex;
@@ -89,6 +122,7 @@
       gap: clamp(10px, 2.5vh, 32px);
       width: 100vw;
       height: 100vh;
+      transition: color 500ms ease;
     }
     #headline span {
       display: block;
@@ -125,6 +159,16 @@
     <input type="range" id="sAnim" min="-100" max="100" value="100">
   </div>
   <div class="ctrl">
+    <span class="ctrl-label">Theme</span>
+    <span class="ctrl-value" id="vTheme">#000000</span>
+    <input type="color" id="sTheme" value="#000000">
+  </div>
+  <div class="ctrl">
+    <span class="ctrl-label">Random BG</span>
+    <span class="ctrl-value" id="vRand">Off</span>
+    <button type="button" id="btnRandomTheme" class="ctrl-btn">Enable</button>
+  </div>
+  <div class="ctrl">
     <span class="ctrl-label">Screen</span>
     <button type="button" id="btnFullscreen" class="ctrl-btn">Full Screen</button>
   </div>
@@ -137,12 +181,77 @@
 new p5(sketch => {
   let t = 0;
   let sliders, vals, controlsH, controlsEl, fullscreenBtn;
+  let randomThemeBtn, randomThemeVal;
   let headlineEl, headlineWords;
+  let themeRgb = [0, 0, 0];
+  let currentBgRgb = [0, 0, 0];
+  let contrastRgb = [255, 255, 255];
+  let randomThemeEnabled = false;
   let uiHidden = false;
   let alignCycle = [0, 1, 2];
   let alignTimer = null;
   const PI23 = Math.PI * 2 / 3;
   const PI3 = Math.PI / 3;
+
+  function hexToRgb(hex) {
+    const v = hex.replace('#', '');
+    const n = parseInt(v, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function luminance(r, g, b) {
+    const s = [r, g, b].map((c) => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+  }
+
+  function contrastColorFor(rgb) {
+    const lum = luminance(rgb[0], rgb[1], rgb[2]);
+    return lum > 0.45 ? [0, 0, 0] : [255, 255, 255];
+  }
+
+  function rgbToCss(rgb) {
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  }
+
+  function updateTheme(themeHex) {
+    themeRgb = hexToRgb(themeHex);
+    contrastRgb = contrastColorFor(themeRgb);
+    const contrastRgbText = `${contrastRgb[0]}, ${contrastRgb[1]}, ${contrastRgb[2]}`;
+    document.documentElement.style.setProperty('--theme-color', themeHex);
+    document.documentElement.style.setProperty('--contrast-color', rgbToCss(contrastRgb));
+    document.documentElement.style.setProperty('--panel-fg', rgbToCss(contrastRgb));
+    document.documentElement.style.setProperty('--panel-fg-rgb', contrastRgbText);
+    document.documentElement.style.setProperty('--controls-bg', `rgba(${contrastRgbText}, 0.08)`);
+    document.documentElement.style.setProperty('--controls-border', `rgba(${contrastRgbText}, 0.32)`);
+    document.documentElement.style.setProperty('--panel-rail', `rgba(${contrastRgbText}, 0.32)`);
+    document.documentElement.style.setProperty('--panel-btn-bg', `rgba(${contrastRgbText}, 0.12)`);
+    vals.theme.textContent = themeHex.toUpperCase();
+  }
+
+  function randomHexColor() {
+    const n = Math.floor(Math.random() * 0x1000000);
+    return `#${n.toString(16).padStart(6, '0')}`;
+  }
+
+  function applyRandomTheme() {
+    const next = randomHexColor();
+    sliders.theme.value = next;
+    updateTheme(next);
+  }
+
+  function syncRandomThemeUI() {
+    if (!randomThemeBtn || !randomThemeVal) return;
+    randomThemeVal.textContent = randomThemeEnabled ? 'On' : 'Off';
+    randomThemeBtn.textContent = randomThemeEnabled ? 'Disable' : 'Enable';
+  }
+
+  function toggleRandomTheme() {
+    randomThemeEnabled = !randomThemeEnabled;
+    syncRandomThemeUI();
+  }
 
   function updateCanvasSize() {
     controlsH = controlsEl.offsetHeight;
@@ -174,6 +283,7 @@ new p5(sketch => {
 
   function rotateHeadlineAlignment() {
     alignCycle = alignCycle.map((v) => (v + 1) % 3);
+    if (randomThemeEnabled) applyRandomTheme();
     applyHeadlineAlignment();
   }
 
@@ -224,6 +334,8 @@ new p5(sketch => {
     sketch.pixelDensity(1);
     controlsEl = document.getElementById('controls');
     fullscreenBtn = document.getElementById('btnFullscreen');
+    randomThemeBtn = document.getElementById('btnRandomTheme');
+    randomThemeVal = document.getElementById('vRand');
     headlineEl = document.getElementById('headline');
     headlineWords = Array.from(headlineEl.querySelectorAll('span'));
     controlsH = controlsEl.offsetHeight;
@@ -239,19 +351,29 @@ new p5(sketch => {
       m:    document.getElementById('sM'),
       n:    document.getElementById('sN'),
       anim: document.getElementById('sAnim'),
+      theme: document.getElementById('sTheme'),
     };
     vals = {
       size: document.getElementById('vSize'),
       m:    document.getElementById('vM'),
       n:    document.getElementById('vN'),
       anim: document.getElementById('vAnim'),
+      theme: document.getElementById('vTheme'),
     };
 
     Object.entries(sliders).forEach(([k, el]) => {
-      el.addEventListener('input', () => syncLabel(k));
+      if (k === 'theme') {
+        el.addEventListener('input', () => updateTheme(el.value));
+      } else {
+        el.addEventListener('input', () => syncLabel(k));
+      }
     });
 
-    Object.keys(sliders).forEach(syncLabel);
+    Object.keys(sliders).forEach((k) => {
+      if (k !== 'theme') syncLabel(k);
+    });
+    updateTheme(sliders.theme.value);
+    syncRandomThemeUI();
     applyHeadlineAlignment();
 
     alignTimer = window.setInterval(() => {
@@ -260,6 +382,10 @@ new p5(sketch => {
 
     fullscreenBtn.addEventListener('click', () => {
       toggleFullscreen();
+    });
+
+    randomThemeBtn.addEventListener('click', () => {
+      toggleRandomTheme();
     });
 
     document.addEventListener('fullscreenchange', syncFullscreenBtn);
@@ -321,8 +447,12 @@ new p5(sketch => {
     const freq = 0.025 / size;
     const step = 8;
 
-    sketch.background(255, 255, 255);
-    sketch.stroke(0, 0, 0);
+    currentBgRgb[0] += (themeRgb[0] - currentBgRgb[0]) * 0.08;
+    currentBgRgb[1] += (themeRgb[1] - currentBgRgb[1]) * 0.08;
+    currentBgRgb[2] += (themeRgb[2] - currentBgRgb[2]) * 0.08;
+
+    sketch.background(currentBgRgb[0], currentBgRgb[1], currentBgRgb[2]);
+    sketch.stroke(contrastRgb[0], contrastRgb[1], contrastRgb[2]);
     sketch.strokeWeight(1.2);
     sketch.noFill();
 
