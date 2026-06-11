@@ -53,6 +53,23 @@
       width: 14px; height: 14px; border-radius: 50%;
       background: #000; box-shadow: 0 0 6px #000; cursor: pointer;
     }
+    .ctrl-btn {
+      border: 1px solid rgba(0,0,0,0.35);
+      background: rgba(255,255,255,0.8);
+      color: #000;
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .ctrl-btn:hover {
+      background: #000;
+      color: #fff;
+    }
     #canvas-wrap { flex: 1; width: 100%; }
     #headline {
       position: fixed;
@@ -108,6 +125,10 @@
     <span class="ctrl-value" id="vAnim">1.0</span>
     <input type="range" id="sAnim" min="-100" max="100" value="100">
   </div>
+  <div class="ctrl">
+    <span class="ctrl-label">Screen</span>
+    <button type="button" id="btnFullscreen" class="ctrl-btn">Full Screen</button>
+  </div>
 </div>
 
 <div id="canvas-wrap"></div>
@@ -116,7 +137,7 @@
 // CPU line renderer for hexagonal Chladni nodal curves (no shader)
 new p5(sketch => {
   let t = 0;
-  let sliders, vals, controlsH, controlsEl;
+  let sliders, vals, controlsH, controlsEl, fullscreenBtn;
   let headlineEl, headlineWords;
   let uiHidden = false;
   let alignCycle = [0, 1, 2];
@@ -173,6 +194,19 @@ new p5(sketch => {
     }
   }
 
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await exitFullscreen();
+    } else {
+      await enterFullscreen();
+    }
+  }
+
+  function syncFullscreenBtn() {
+    if (!fullscreenBtn) return;
+    fullscreenBtn.textContent = document.fullscreenElement ? 'Exit Full Screen' : 'Full Screen';
+  }
+
   function toggleUI() {
     uiHidden = !uiHidden;
     document.body.classList.toggle('ui-hidden', uiHidden);
@@ -187,6 +221,7 @@ new p5(sketch => {
   sketch.setup = function () {
     sketch.pixelDensity(1);
     controlsEl = document.getElementById('controls');
+    fullscreenBtn = document.getElementById('btnFullscreen');
     headlineEl = document.getElementById('headline');
     headlineWords = Array.from(headlineEl.querySelectorAll('span'));
     controlsH = controlsEl.offsetHeight;
@@ -220,6 +255,13 @@ new p5(sketch => {
     alignTimer = window.setInterval(() => {
       rotateHeadlineAlignment();
     }, 5000);
+
+    fullscreenBtn.addEventListener('click', () => {
+      toggleFullscreen();
+    });
+
+    document.addEventListener('fullscreenchange', syncFullscreenBtn);
+    syncFullscreenBtn();
 
     window.addEventListener('keydown', (ev) => {
       if (ev.code !== 'Space') return;
