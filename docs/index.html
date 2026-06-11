@@ -33,6 +33,10 @@
     body.ui-hidden #controls {
       display: none;
     }
+    body.headline-hidden #headline {
+      opacity: 0;
+      visibility: hidden;
+    }
     #controls {
       display: flex;
       flex-wrap: wrap;
@@ -122,7 +126,9 @@
       gap: clamp(10px, 2.5vh, 32px);
       width: 100vw;
       height: 100vh;
-      transition: color 500ms ease;
+      opacity: 1;
+      visibility: visible;
+      transition: color 500ms ease, opacity 280ms ease;
     }
     #headline span {
       display: block;
@@ -169,6 +175,11 @@
     <button type="button" id="btnRandomTheme" class="ctrl-btn">Enable</button>
   </div>
   <div class="ctrl">
+    <span class="ctrl-label">Headline</span>
+    <span class="ctrl-value" id="vHeadline">On</span>
+    <button type="button" id="btnHeadline" class="ctrl-btn">Hide</button>
+  </div>
+  <div class="ctrl">
     <span class="ctrl-label">Screen</span>
     <button type="button" id="btnFullscreen" class="ctrl-btn">Full Screen</button>
   </div>
@@ -182,11 +193,13 @@ new p5(sketch => {
   let t = 0;
   let sliders, vals, controlsH, controlsEl, fullscreenBtn;
   let randomThemeBtn, randomThemeVal;
+  let headlineBtn, headlineVal;
   let headlineEl, headlineWords;
   let themeRgb = [0, 0, 0];
   let currentBgRgb = [0, 0, 0];
   let contrastRgb = [255, 255, 255];
   let randomThemeEnabled = false;
+  let headlineVisible = true;
   let uiHidden = false;
   let alignCycle = [0, 1, 2];
   let alignTimer = null;
@@ -251,6 +264,18 @@ new p5(sketch => {
   function toggleRandomTheme() {
     randomThemeEnabled = !randomThemeEnabled;
     syncRandomThemeUI();
+  }
+
+  function syncHeadlineUI() {
+    if (!headlineBtn || !headlineVal) return;
+    headlineVal.textContent = headlineVisible ? 'On' : 'Off';
+    headlineBtn.textContent = headlineVisible ? 'Hide' : 'Show';
+  }
+
+  function toggleHeadline() {
+    headlineVisible = !headlineVisible;
+    document.body.classList.toggle('headline-hidden', !headlineVisible);
+    syncHeadlineUI();
   }
 
   function updateCanvasSize() {
@@ -336,6 +361,8 @@ new p5(sketch => {
     fullscreenBtn = document.getElementById('btnFullscreen');
     randomThemeBtn = document.getElementById('btnRandomTheme');
     randomThemeVal = document.getElementById('vRand');
+    headlineBtn = document.getElementById('btnHeadline');
+    headlineVal = document.getElementById('vHeadline');
     headlineEl = document.getElementById('headline');
     headlineWords = Array.from(headlineEl.querySelectorAll('span'));
     controlsH = controlsEl.offsetHeight;
@@ -374,6 +401,7 @@ new p5(sketch => {
     });
     updateTheme(sliders.theme.value);
     syncRandomThemeUI();
+    syncHeadlineUI();
     applyHeadlineAlignment();
 
     alignTimer = window.setInterval(() => {
@@ -386,6 +414,10 @@ new p5(sketch => {
 
     randomThemeBtn.addEventListener('click', () => {
       toggleRandomTheme();
+    });
+
+    headlineBtn.addEventListener('click', () => {
+      toggleHeadline();
     });
 
     document.addEventListener('fullscreenchange', syncFullscreenBtn);
