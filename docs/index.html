@@ -151,6 +151,12 @@ new p5(sketch => {
     applyHeadlineAlignment();
   }
 
+  function setUiHidden(hidden) {
+    uiHidden = hidden;
+    document.body.classList.toggle('ui-hidden', uiHidden);
+    updateCanvasSize();
+  }
+
   function xForAlign(wordWidth, lineWidth, align) {
     if (align === 1) return (lineWidth - wordWidth) * 0.5;
     if (align === 2) return lineWidth - wordWidth;
@@ -208,13 +214,10 @@ new p5(sketch => {
   }
 
   function toggleUI() {
-    uiHidden = !uiHidden;
-    document.body.classList.toggle('ui-hidden', uiHidden);
-    updateCanvasSize();
-    if (uiHidden) {
-      enterFullscreen();
-    } else {
+    if (document.fullscreenElement) {
       exitFullscreen();
+    } else {
+      enterFullscreen();
     }
   }
 
@@ -261,6 +264,9 @@ new p5(sketch => {
     });
 
     document.addEventListener('fullscreenchange', syncFullscreenBtn);
+    document.addEventListener('fullscreenchange', () => {
+      setUiHidden(Boolean(document.fullscreenElement));
+    });
     syncFullscreenBtn();
 
     window.addEventListener('keydown', (ev) => {
